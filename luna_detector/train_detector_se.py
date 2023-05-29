@@ -19,7 +19,7 @@ from torch import optim
 from torch.autograd import Variable
 from config_training import config as config_training
 
-from layers import acc
+# from layers import acc
 
 parser = argparse.ArgumentParser(description='PyTorch DataBowl3 Detector')
 parser.add_argument('--model', '-m', metavar='MODEL', default='res18_se',
@@ -166,9 +166,9 @@ def train(data_loader, net, loss, epoch, optimizer, get_lr, save_dir):
 
     metrics = []
     for i, (data, target, coord) in enumerate(data_loader):
-        data = Variable(data.cuda(async = True))
-        target = Variable(target.cuda(async = True))
-        coord = Variable(coord.cuda(async = True))
+        data = Variable(data.cuda(non_blocking = True))
+        target = Variable(target.cuda(non_blocking = True))
+        coord = Variable(coord.cuda(non_blocking = True))
 
         output = net(data, coord)
         
@@ -208,9 +208,9 @@ def validate(data_loader, net, loss):
 
     metrics = []
     for i, (data, target, coord) in enumerate(data_loader):
-        data = Variable(data.cuda(async = True))
-        target = Variable(target.cuda(async = True))
-        coord = Variable(coord.cuda(async = True))
+        data = Variable(data.cuda(non_blocking = True))
+        target = Variable(target.cuda(non_blocking = True))
+        coord = Variable(coord.cuda(non_blocking = True))
 
         output = net(data, coord)
         loss_output = loss(output, target, train = False)
@@ -268,8 +268,8 @@ def test(data_loader, net, get_pbb, save_dir, config):
         featurelist = []
 
         for i in range(len(splitlist)-1):
-            input = Variable(data[splitlist[i]:splitlist[i+1]].cuda(async = True))
-            inputcoord = Variable(coord[splitlist[i]:splitlist[i+1]].cuda(async = True))
+            input = Variable(data[splitlist[i]:splitlist[i+1]].cuda(non_blocking = True))
+            inputcoord = Variable(coord[splitlist[i]:splitlist[i+1]].cuda(non_blocking = True))
             if isfeat:
                 output,feature = net(input,inputcoord)
                 featurelist.append(feature.data.cpu().numpy())
@@ -307,7 +307,7 @@ def singletest(data,net,config,splitfun,combinefun,n_per_run,margin = 64,isfeat=
     z, h, w = data.size(2), data.size(3), data.size(4)
     print(data.size())
     data = splitfun(data,config['max_stride'],margin)
-    data = Variable(data.cuda(async = True), requires_grad=False)
+    data = Variable(data.cuda(non_blocking = True), requires_grad=False)
     splitlist = range(0,args.split+1,n_per_run)
     outputlist = []
     featurelist = []

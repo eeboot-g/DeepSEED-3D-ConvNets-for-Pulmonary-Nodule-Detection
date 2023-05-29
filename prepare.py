@@ -5,7 +5,7 @@ from config_training import config
 
 from scipy.io import loadmat
 import numpy as np
-import h5py
+# import h5py
 import pandas
 import scipy
 from scipy.ndimage.interpolation import zoom
@@ -172,7 +172,7 @@ def savenpy_luna(id, annos, filelist, luna_segment, luna_data,savepath):
     print(name)
 
 
-def preprocess_luna():
+def preprocess_luna0():
     luna_segment = config['luna_segment']
     savepath = config['preprocess_result_path']
     luna_data = config['luna_data']
@@ -198,7 +198,33 @@ def preprocess_luna():
         pool.join()
     print('end preprocessing luna')
     f= open(finished_flag,"w+")
-    
+
+
+def preprocess_luna():
+    luna_segment = config['luna_segment']
+    savepath = config['preprocess_result_path']
+    luna_data = config['luna_data']
+    luna_label = config['luna_label']
+    finished_flag = '.flag_preprocessluna'
+    print('starting preprocessing luna')
+    if not os.path.exists(finished_flag):
+        filelist = [f.split('.mhd')[0] for f in os.listdir(luna_data) if f.endswith('.mhd')]
+        annos = np.array(pandas.read_csv(luna_label))
+
+        if not os.path.exists(savepath):
+            os.mkdir(savepath)
+
+        pool = Pool(15)
+        partial_savenpy_luna = partial(savenpy_luna, annos=annos, filelist=filelist,
+                                       luna_segment=luna_segment, luna_data=luna_data, savepath=savepath)
+
+        for i in range(len(filelist)):
+            pool.apply_async(partial_savenpy_luna, args=(i,))
+
+        pool.close()
+        pool.join()
+    print('end preprocessing luna')
+    f = open(finished_flag, "w+")
     
 def prepare_luna():
     print('start changing luna name')

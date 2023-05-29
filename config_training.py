@@ -1,10 +1,10 @@
-config = {'luna_raw':'/data/LunaProj/LUNA/LUNAdata/lunafull/',
-          'luna_segment':'/data/LunaProj/LUNA/LUNAdata/seg-lungs-LUNA16/',
+config = {'luna_raw':'/root/autodl-tmp/LUNA16/lunafull/',
+          'luna_segment':'/root/autodl-tmp/LUNA16/seg-lungs-LUNA16/',
           
-          'luna_data':'/data/LunaProj/LUNA/LUNAdata/lunadata//',
-          'preprocess_result_path':'/data/LunaProj/LUNA/LUNAdata/lunaprep/',       
+          'luna_data':'/root/autodl-tmp/LUNA16/lunadata/',
+          'preprocess_result_path':'/root/autodl-tmp/LUNA16/lunaprep/',
           
-          'luna_abbr':'./detector/labels/shorter.csv',
-          'luna_label':'./detector/labels/annos.csv',
+          'luna_abbr':'./luna_detector/labels/shorter.csv',
+          'luna_label':'./luna_detector/labels/annos.csv',
           'preprocessing_backend':'python'
          }

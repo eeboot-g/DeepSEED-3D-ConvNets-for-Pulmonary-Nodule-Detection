@@ -116,8 +116,8 @@ def test(data_loader, net, get_pbb, save_dir, config):
         featurelist = []
 
         for i in range(len(splitlist)-1):
-            input = Variable(data[splitlist[i]:splitlist[i+1]].cuda(async = True))
-            inputcoord = Variable(coord[splitlist[i]:splitlist[i+1]].cuda(async = True))
+            input = Variable(data[splitlist[i]:splitlist[i+1]].cuda(non_blocking = True))
+            inputcoord = Variable(coord[splitlist[i]:splitlist[i+1]].cuda(non_blocking = True))
             if isfeat:
                 output,feature = net(input,inputcoord)
                 featurelist.append(feature.data.cpu().numpy())

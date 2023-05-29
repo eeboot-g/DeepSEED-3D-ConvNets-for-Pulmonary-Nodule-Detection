@@ -12,7 +12,7 @@ from config_training import config
 
 
 from scipy.io import loadmat
-import h5py
+# import h5py
 import pandas
 import scipy
 from scipy.ndimage.interpolation import zoom
