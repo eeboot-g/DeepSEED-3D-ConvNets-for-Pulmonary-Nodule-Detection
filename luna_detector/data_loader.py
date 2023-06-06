@@ -22,14 +22,25 @@ import pdb
 
 
 class LungNodule3Ddetector(Dataset):
+    '''
+    data_dir 数据文件路径
+    split_path 数据分组文件，内为包含id的numpy数组
+    config 配置文件
+    phase 阶段
+    split_comber 数据分割器，只在test阶段有效
+    '''
     def __init__(self, data_dir, split_path, config, phase = 'train',split_comber=None):
         assert(phase == 'train' or phase == 'val' or phase == 'test')
         self.phase = phase
         self.max_stride = config['max_stride']
-        self.stride = config['stride']       
+        self.stride = config['stride']
+        #标注大小 3
         sizelim = config['sizelim']/config['reso']
+        #标注大小 10
         sizelim2 = config['sizelim2']/config['reso']
+        #标注大小 20
         sizelim3 = config['sizelim3']/config['reso']
+
         self.blacklist = config['blacklist']
         self.isScale = config['aug_scale']
         self.r_rand = config['r_rand_crop']
@@ -39,11 +50,13 @@ class LungNodule3Ddetector(Dataset):
         #idcs = np.load(split_path)
         idcs = split_path
 
+        #对训练和验证数据进行过滤，去除黑名单中的id
         if phase!='test':
             idcs = [f for f in idcs if (f not in self.blacklist)]
 
+        #所有的训练数据文件路径
         self.filenames = [os.path.join(data_dir, '%s_clean.npy' % idx) for idx in idcs]
-        
+
         labels = []
         
         for idx in idcs:
@@ -52,6 +65,7 @@ class LungNodule3Ddetector(Dataset):
                 l=np.array([])
             labels.append(l)
 
+        #所有的标注数据,每个元素为一个arra,对应一张影像上的所有标注
         self.sample_bboxes = labels
         if self.phase != 'test':
             self.bboxes = []
@@ -65,6 +79,7 @@ class LungNodule3Ddetector(Dataset):
                             self.bboxes+=[[np.concatenate([[i],t])]]*2
                         if t[3]>sizelim3:
                             self.bboxes+=[[np.concatenate([[i],t])]]*4
+            # 所有的标注，结节越大，每个结节的标注越多，最多的数量为1+2+4，标注越多，被采样的概率越大
             self.bboxes = np.concatenate(self.bboxes,axis = 0)
 
         self.crop = Crop(config)
@@ -87,11 +102,15 @@ class LungNodule3Ddetector(Dataset):
         
         if self.phase != 'test':
             if not isRandomImg:
+                # idx对应的那个标注
                 bbox = self.bboxes[idx]
                 filename = self.filenames[int(bbox[0])]
+                # 标注对应的影像
                 imgs = np.load(filename)
+                # 影像对应的所有标注
                 bboxes = self.sample_bboxes[int(bbox[0])]
                 isScale = self.augtype['scale'] and (self.phase=='train')
+
                 sample, target, bboxes, coord = self.crop(imgs, bbox[1:], bboxes,isScale,isRandom)
                 if self.phase=='train' and not isRandom:
                      sample, target, bboxes, coord = augment(sample, target, bboxes, coord,
@@ -104,6 +123,7 @@ class LungNodule3Ddetector(Dataset):
                 isScale = self.augtype['scale'] and (self.phase=='train')
                 sample, target, bboxes, coord = self.crop(imgs, [], bboxes,isScale=False,isRand=True)
             label = self.label_mapping(sample.shape[1:], target, bboxes)
+            #值归一化为[-1,1]
             sample = (sample.astype(np.float32)-128)/128
             return torch.from_numpy(sample), torch.from_numpy(label), coord
         else:
@@ -130,13 +150,16 @@ class LungNodule3Ddetector(Dataset):
 
     def __len__(self):
         if self.phase == 'train':
+            # 扩增了self.r_rand比例的数据作为随机裁剪的数据
             return int(len(self.bboxes)/(1-self.r_rand))
         elif self.phase =='val':
             return len(self.bboxes)
         else:
             return len(self.sample_bboxes)
         
-        
+'''
+数据增强
+'''
 def augment(sample, target, bboxes, coord, ifflip=True, ifrotate=True, ifswap=True):
     #                     angle1 = np.random.rand()*180
     if ifrotate:
@@ -182,18 +205,36 @@ def augment(sample, target, bboxes, coord, ifflip=True, ifrotate=True, ifswap=Tr
 
 class Crop(object):
     def __init__(self, config):
+        # 裁剪区域大小
         self.crop_size = config['crop_size']
         self.bound_size = config['bound_size']
         self.stride = config['stride']
         self.pad_value = config['pad_value']
 
+    '''
+    影像裁剪
+    imgs 影像数据
+    target 目标标注
+    bboxes 所有的标注
+    isScale 是否缩放
+    isRand 是否随机
+    
+    return:
+    crop 经过缩放、填充的裁剪区域
+    target 目标标注，坐标已经转换为在crop区域中的相对坐标
+    bboxes 所有的标注，坐标已经转换为在crop区域中的相对坐标
+    coord 锚点坐标？带有0.5的偏转
+    '''
     def __call__(self, imgs, target, bboxes, isScale=False, isRand=False):
         if isScale:
             radiusLim = [8., 100.]
             scaleLim = [0.75, 1.25]
+            # scaleRange[0.75-1,1-1.25]
             scaleRange = [np.min([np.max([(radiusLim[0] / target[3]), scaleLim[0]]), 1])
                 , np.max([np.min([(radiusLim[1] / target[3]), scaleLim[1]]), 1])]
+            # 计算一个缩放值
             scale = np.random.rand() * (scaleRange[1] - scaleRange[0]) + scaleRange[0]
+            # 计算一个缩放的裁剪区域
             crop_size = (np.array(self.crop_size).astype('float') / scale).astype('int')
         else:
             crop_size = self.crop_size
@@ -204,28 +245,37 @@ class Crop(object):
         start = []
         for i in range(3):
             if not isRand:
+                # 半径
                 r = target[3] / 2
+                # 左边界
                 s = np.floor(target[i] - r) + 1 - bound_size
+                # 右边界，已经扣除一个crop_size
                 e = np.ceil(target[i] + r) + 1 + bound_size - crop_size[i]
             else:
                 s = np.max([imgs.shape[i + 1] - crop_size[i] / 2, imgs.shape[i + 1] / 2 + bound_size])
                 e = np.min([crop_size[i] / 2, imgs.shape[i + 1] / 2 - bound_size])
                 target = np.array([np.nan, np.nan, np.nan, np.nan])
             if s > e:
+                # 如果s大于e,说明裁剪区域比标注区域大，则取start为e和s之间的一个数值，这样则标注区域完全包含在裁剪区域内
                 start.append(int(np.random.randint(e, s)))  # !
             else:
+                # 否则，以目标点为中心，以crop_size/2为半径，并随机增减bound_size / 2，这样则尽量将标注点放到裁剪的中心位置
                 start.append(int(target[i] - crop_size[i] / 2 + np.random.randint(-bound_size / 2, bound_size / 2)))
 
+        # 将start的体素坐标归一化为float值,减0.5，TODO 为什么减0.5
         normstart = np.array(start).astype('float32') / np.array(imgs.shape[1:]) - 0.5
+        # 将裁剪大小归一化为0-1之间的float值
         normsize = np.array(crop_size).astype('float32') / np.array(imgs.shape[1:])
-        xx, yy, zz = np.meshgrid(np.linspace(normstart[0], normstart[0] + normsize[0], self.crop_size[0] / self.stride),
-                                 np.linspace(normstart[1], normstart[1] + normsize[1], self.crop_size[1] / self.stride),
-                                 np.linspace(normstart[2], normstart[2] + normsize[2], self.crop_size[2] / self.stride),
+        xx, yy, zz = np.meshgrid(np.linspace(normstart[0], normstart[0] + normsize[0], self.crop_size[0] // self.stride),
+                                 np.linspace(normstart[1], normstart[1] + normsize[1], self.crop_size[1] // self.stride),
+                                 np.linspace(normstart[2], normstart[2] + normsize[2], self.crop_size[2] // self.stride),
                                  indexing='ij')
+        # 得到裁剪范围的所有的按stride分布的交点，float值
         coord = np.concatenate([xx[np.newaxis, ...], yy[np.newaxis, ...], zz[np.newaxis, :]], 0).astype('float32')
 
         pad = []
         pad.append([0, 0])
+        # 计算裁剪后的填充区域
         for i in range(3):
             leftpad = max(0, -start[i])
             rightpad = max(0, start[i] + crop_size[i] - imgs.shape[i + 1])
@@ -234,9 +284,12 @@ class Crop(object):
                max(start[0], 0):min(start[0] + crop_size[0], imgs.shape[1]),
                max(start[1], 0):min(start[1] + crop_size[1], imgs.shape[2]),
                max(start[2], 0):min(start[2] + crop_size[2], imgs.shape[3])]
+        # 使用pad_value对裁剪区域进行填充
         crop = np.pad(crop, pad, 'constant', constant_values=self.pad_value)
+        #将目标标注中心坐标转换为相对裁剪区域的坐标
         for i in range(3):
             target[i] = target[i] - start[i]
+        # 将所有标注中心坐标转换为相对裁剪区域的坐标
         for i in range(len(bboxes)):
             for j in range(3):
                 bboxes[i][j] = bboxes[i][j] - start[j]
@@ -244,13 +297,17 @@ class Crop(object):
         if isScale:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
+                # 对裁剪区域进行缩放
                 crop = zoom(crop, [1, scale, scale, scale], order=1)
             newpad = self.crop_size[0] - crop.shape[1:][0]
             if newpad < 0:
+                # 如果预设的裁剪区域小于实际裁剪的区域，则应该进一步裁剪，TODO 似乎经过裁剪后crop更小了，应该为newpad？目前测试发现newpad>=0
                 crop = crop[:, :-newpad, :-newpad, :-newpad]
             elif newpad > 0:
+                # 如果预设的裁剪区域大于实际裁剪的区域，则填充边界
                 pad2 = [[0, 0], [0, newpad], [0, newpad], [0, newpad]]
                 crop = np.pad(crop, pad2, 'constant', constant_values=self.pad_value)
+            #所有的标注进行缩放
             for i in range(4):
                 target[i] = target[i] * scale
             for i in range(len(bboxes)):
@@ -271,6 +328,11 @@ class LabelMapping(object):
         elif phase == 'val':
             self.th_pos = config['th_pos_val']
 
+    '''
+    input_size 裁剪区域大小
+    target 目标标注
+    bboxes 所有标注
+    '''
     def __call__(self, input_size, target, bboxes):
         stride = self.stride
         num_neg = self.num_neg
@@ -278,12 +340,13 @@ class LabelMapping(object):
         anchors = self.anchors
         th_pos = self.th_pos
         struct = generate_binary_structure(3, 1)
-
+        #
         output_size = []
         for i in range(3):
             assert (input_size[i] % stride == 0)
             output_size.append(int(input_size[i] / stride))
 
+        # label shape类似于(32,32,32,3,5)，代表含义为z,y,x,d(直径),p(置信度)
         label = np.zeros(output_size + [len(anchors), 5], np.float32)
         offset = ((stride.astype('float')) - 1) / 2
         oz = np.arange(offset, offset + stride * (output_size[0] - 1) + 1, stride)
@@ -337,7 +400,16 @@ class LabelMapping(object):
         label[pos[0], pos[1], pos[2], pos[3], :] = [1, dz, dh, dw, dd]
         return label
 
+'''
+bbox: 标注点
+anchor: 锚框大小
+th:
+oz: z方向所有的点
+oh: h方向所有的点
+ow: w方向所有的点
 
+
+'''
 def select_samples(bbox, anchor, th, oz, oh, ow):
     z, h, w, d = bbox
     max_overlap = min(d, anchor)

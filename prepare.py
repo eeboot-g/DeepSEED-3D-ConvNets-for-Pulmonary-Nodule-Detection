@@ -20,7 +20,7 @@ import sys
 import warnings
 import pdb
 
-
+# 重新采样
 def resample(imgs, spacing, new_spacing,order=2):
     if len(imgs.shape)==3:
         new_shape = np.round(imgs.shape * spacing / new_spacing)
@@ -40,6 +40,7 @@ def resample(imgs, spacing, new_spacing,order=2):
     else:
         raise ValueError('wrong shape')
         
+# 世界坐标转体素坐标
 def worldToVoxelCoord(worldCoord, origin, spacing):
      
     stretchedVoxelCoord = np.absolute(worldCoord - origin)
@@ -65,7 +66,11 @@ def load_itk_image(filename):
      
     return numpyImage, numpyOrigin, numpySpacing,isflip
 
-
+'''
+处理mask，
+先使用convex_hull_image找到包含整张图像的所有前景的最小凸多边形，并填充成前景，如果凸多边形超过原图1.5倍则采用原图
+对前景进行膨胀(3,1)
+'''
 def process_mask(mask):
     convex_mask = np.copy(mask)
     for i_layer in range(convex_mask.shape[0]):
@@ -81,7 +86,9 @@ def process_mask(mask):
     dilatedMask = binary_dilation(convex_mask,structure=struct,iterations=10) 
     return dilatedMask
 
-
+'''
+截取处理影像窗口，将窗口归一化到[0,255]
+'''
 def lumTrans(img):
     lungwin = np.array([-1200.,600.])
     newimg = (img-lungwin[0])/(lungwin[1]-lungwin[0])
@@ -99,20 +106,27 @@ def savenpy_luna(id, annos, filelist, luna_segment, luna_data,savepath):
     name = filelist[id]
     
     sliceim,origin,spacing,isflip = load_itk_image(os.path.join(luna_data,name+'.mhd'))
-
     Mask,origin,spacing,isflip = load_itk_image(os.path.join(luna_segment,name+'.mhd'))
     if isflip:
+        sliceim = sliceim[:, ::-1, ::-1]
         Mask = Mask[:,::-1,::-1]
+        print('flip!')
+
     newshape = np.round(np.array(Mask.shape)*spacing/resolution).astype('int')
+    # 生成二值图
     m1 = Mask==3
     m2 = Mask==4
+    # 包含左肺和右肺的mask
     Mask = m1+m2
     
     xx,yy,zz= np.where(Mask)
+    # 计算原图的肺部的包围盒
     box = np.array([[np.min(xx),np.max(xx)],[np.min(yy),np.max(yy)],[np.min(zz),np.max(zz)]])
+    # 肺部包围盒按重采样后的大小进行缩放
     box = box*np.expand_dims(spacing,1)/np.expand_dims(resolution,1)
     box = np.floor(box).astype('int')
     margin = 5
+    # 向左扩展一个margin 向右扩展两个margin
     extendbox = np.vstack([np.max([[0,0,0],box[:,0]-margin],0),np.min([newshape,box[:,1]+2*margin],axis=0).T]).T
     
     this_annos = np.copy(annos[annos[:,0]==float(name)])
@@ -121,30 +135,43 @@ def savenpy_luna(id, annos, filelist, luna_segment, luna_data,savepath):
         convex_mask = m1
         dm1 = process_mask(m1)
         dm2 = process_mask(m2)
+        # 膨胀过的前景，包含左右肺（可能为凸多边形）
         dilatedMask = dm1+dm2
+        # 包含左肺和右肺的mask
         Mask = m1+m2
-
+        # 按位异或，提取出肺轮廓的外轮廓边界作为前景（可能为凸多边形）
         extramask = dilatedMask ^ Mask
         bone_thresh = 210
         pad_value = 170
 
-        if isflip:
-            sliceim = sliceim[:,::-1,::-1]
-            print('flip!')
+        # CT值转为 0-255
         sliceim = lumTrans(sliceim)
+        # 使用dilatedMask提取出肺部区域，并将影像上其他区域的值设置为170
         sliceim = sliceim*dilatedMask+pad_value*(1-dilatedMask).astype('uint8')
+        # 提取出骨头
         bones = (sliceim*extramask)>bone_thresh
+        # 骨头值也设置为170
         sliceim[bones] = pad_value
-        
+
+        # 安装指定的体素进行重采样
         sliceim1,_ = resample(sliceim,spacing,resolution,order=1)
+
+        # 使用extendbox对重采样后的影像进行裁剪
         sliceim2 = sliceim1[extendbox[0,0]:extendbox[0,1],
                     extendbox[1,0]:extendbox[1,1],
                     extendbox[2,0]:extendbox[2,1]]
+
+        # 转换为4维数组
         sliceim = sliceim2[np.newaxis,...]
+        # 重采样后按包围框裁剪的影像
         np.save(os.path.join(savepath, name+'_clean.npy'), sliceim)
+        # 原始spacing
         np.save(os.path.join(savepath, name+'_spacing.npy'), spacing)
+        # 重采样分辨率下的包围框
         np.save(os.path.join(savepath, name+'_extendbox.npy'), extendbox)
+        # 原始origin
         np.save(os.path.join(savepath, name+'_origin.npy'), origin)
+        # 左右肺MASK，原始分辨率下的
         np.save(os.path.join(savepath, name+'_mask.npy'), Mask)
 
     if islabel:
@@ -153,9 +180,11 @@ def savenpy_luna(id, annos, filelist, luna_segment, luna_data,savepath):
         if len(this_annos)>0:
             
             for c in this_annos:
+                # 获取标注文件中的标注坐标，计算为体素坐标，标注坐标轴做了调整
                 pos = worldToVoxelCoord(c[1:4][::-1],origin=origin,spacing=spacing)
                 if isflip:
                     pos[1:] = Mask.shape[1:3]-pos[1:]
+                # 生成新的标注信息，将直径的长度变换为体素数量
                 label.append(np.concatenate([pos,[c[4]/spacing[1]]]))
             
         label = np.array(label)

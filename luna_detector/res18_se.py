@@ -5,9 +5,12 @@ import pdb
 import math
 
 config = {}
+# 锚框尺寸
 config['anchors'] = [ 5.0, 10.0, 20.]
 config['chanel'] = 1
+# 裁剪区域大小
 config['crop_size'] = [128, 128, 128]
+# 裁剪区域步长
 config['stride'] = 4
 config['max_stride'] = 16
 config['num_neg'] = 800
@@ -15,14 +18,21 @@ config['th_neg'] = 0.02
 config['th_pos_train'] = 0.5
 config['th_pos_val'] = 1
 config['num_hard'] = 2
+# 裁剪区边界大小
 config['bound_size'] = 12
+# 体素分辨率
 config['reso'] = 1
+# 标注直径大小
 config['sizelim'] = 3. #mm, smallest nodule size
 config['sizelim2'] = 10
 config['sizelim3'] = 20
+
 config['aug_scale'] = True
+# 出现随机裁剪的概率
 config['r_rand_crop'] = 0.5
+# 裁剪数据时，如果超出图像边界，使用的填充值
 config['pad_value'] = 0
+# 训练数据处理
 config['augtype'] = {'flip':True,'swap':False,'scale':True,'rotate':False}
 config['blacklist'] = ['868b024d9fa388b7ddab12ec1c06af38','990fbe3f0a1b53878669967b9afd1441','adc3bbc63d40f8761c59be10f1e504c3']
     

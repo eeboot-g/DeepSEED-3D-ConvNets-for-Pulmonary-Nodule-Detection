@@ -120,7 +120,7 @@ def main():
     train_loader = DataLoader(dataset, batch_size = args.batch_size, shuffle = True, num_workers = args.workers, pin_memory=True)
 
     dataset = LungNodule3Ddetector(datadir, luna_test, config, phase = 'val')
-    val_loader = DataLoader(dataset, batch_size = 16, shuffle = False, num_workers = args.workers, pin_memory=True)
+    val_loader = DataLoader(dataset, batch_size = 5, shuffle = False, num_workers = args.workers, pin_memory=True)
 
     optimizer = torch.optim.SGD( net.parameters(), args.lr, momentum = 0.9, weight_decay = args.weight_decay)
     
@@ -177,8 +177,10 @@ def train(data_loader, net, loss, epoch, optimizer, get_lr, save_dir):
         loss_output[0].backward()
         optimizer.step()
 
-        loss_output[0] = loss_output[0].item()
-        metrics.append(loss_output)
+        loss_output_cpu = [ loss_output[i].item() if type(loss_output[i])==torch.Tensor else loss_output[i] for i in range(len(loss_output))]
+        # loss_output[0] = loss_output[0].item()
+
+        metrics.append(loss_output_cpu)
         
         print("finished iteration {} with loss {}.".format(i, loss_output[0]))
                 
@@ -215,8 +217,10 @@ def validate(data_loader, net, loss):
         output = net(data, coord)
         loss_output = loss(output, target, train = False)
 
-        loss_output[0] = loss_output[0].item()
-        metrics.append(loss_output)    
+        #loss_output[0] = loss_output[0].item()
+        loss_output_cpu = [loss_output[i].item() if type(loss_output[i]) == torch.Tensor else loss_output[i] for i in
+                           range(len(loss_output))]
+        metrics.append(loss_output_cpu)
     end_time = time.time()
 
     metrics = np.asarray(metrics, np.float32)
